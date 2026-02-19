@@ -6,3 +6,5 @@ Tested with Violentmonkey on Librewolf with RED Dark.
 ### Usage
 - Enter OPS API key in takeout tab on RED
 - Set qui instance URL and api key in settings
+
+Note: AI partly used in development
