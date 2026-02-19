@@ -2,7 +2,7 @@
 
 // ----------------------------------- MetaData --------------------------------------
 
-// @name        combined quiCKIE
+// @name        quiCKIETakeout
 // @author      WirlyWirly + enhancer + malefis + contributors 🫶
 // @version     1.0.1
 // @description A quiCKIE way to send torrents from various trackers to qui!
