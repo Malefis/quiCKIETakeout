@@ -103,6 +103,15 @@
 // @match   https://nebulance.io/top10.php*
 // @match   https://nebulance.io/bookmarks.php*
 
+// @match   https://lst.gg/torrents*
+
+// @match   https://fearnopeer.com/torrents*
+
+// @match   https://seedpool.org/torrents*
+
+// @match   https://www.nordicq.org/torrents*
+
+
 
 
 // ----------------------------------- Script Links --------------------------------------
@@ -138,8 +147,11 @@ const settingsPanelEntries = {
     'redacted': 'Redacted',
     'secret-cinema': 'SecretCinema', // @tartuffe
     'anthelion': 'Anthelion',
-    'nebulance': 'Nebulance'
-
+    'nebulance': 'Nebulance',
+    'lst': 'LST',
+    'fearnopeer': 'FearNoPeer',
+    'seedpool': 'Seedpool',
+    'nordicq': 'NordicQ'
 }
 
 // =================================== CONFIG MENU ======================================
@@ -388,39 +400,52 @@ GM_registerMenuCommand('Settings', () => {
 
 // =================================== FUNCTIONS ======================================
 
-function quiAddTorrent(quiURL, quiApiKey, torrentURL, category = '', savePath = '', tags = '', ratioLimit = '', startPaused = false, seqPieces = false) {
-    // Add a torrent to qui using the provided arguments
+function setClickedStatus(emoji) {
+    // Update the clicked bunnyButton's text and release the __CLICKED__ id
+    const el = document.getElementById('__CLICKED__')
+    if (el) {
+        el.textContent = emoji
+        el.removeAttribute('id')
+    }
+}
+
+function parseQuiApiURL(quiURL) {
+    // Parse the quiURL into the API endpoint for adding torrents
+    const match = quiURL.match(/^(.*)\/(instances\/\d+)/)
+    if (!match) throw new Error('Invalid quiURL')
+    return `${match[1]}/api/${match[2]}/torrents`
+}
+
+function quiAddTorrent(quiURL, quiApiKey, {torrentURL, torrentBlob, filename} = {}, category = '', savePath = '', tags = '', ratioLimit = '', startPaused = false, seqPieces = false) {
+    // Add a torrent to qui using the provided arguments (supports both URL and file upload)
 
     try {
-        // Using the saved quiURL, generate the API endpoint to send the POST
-
-        let quiHost = quiURL.match(/^(.*)\/(instances\/\d+)/)[1]
-        let quiInstance = quiURL.match(/^(.*)\/(instances\/\d+)/)[2]
-        var quiApiAddTorrentURL = `${quiHost}/api/${quiInstance}/torrents`
-
+        var quiApiAddTorrentURL = parseQuiApiURL(quiURL)
     } catch(error) {
         // Failed to parse quiURL
         console.log(error)
-
-        document.getElementById('__CLICKED__').textContent == ' ❌ '
-        document.getElementById('__CLICKED__').removeAttribute('id')
-
+        setClickedStatus(' ❌ ')
         window.alert(`❌ quiCKIE ❌\n\nFailed to generate the qui API endpoint from the saved quiURL.\n\nCheck your quiURL for typos.\n\n${quiURL}`)
-
         return
     }
 
     // The form data that will be passed to qui
     let form = new FormData()
-    form.append('urls', torrentURL)
+
+    if (torrentBlob) {
+        form.append('torrent', torrentBlob, filename)
+    } else {
+        form.append('urls', torrentURL)
+    }
+
     form.append('category', category)
     form.append('savepath', savePath)
     form.append('tags', tags)
     form.append('ratioLimit', ratioLimit)
     form.append('paused', startPaused)
 
-    if ( seqPieces == true ) {
-        // Allow for playback while downloading by enabling "Sequential Piece Downloading" AND "First\Last Piece Priority" 
+    if ( seqPieces ) {
+        // Allow for playback while downloading by enabling "Sequential Piece Downloading" AND "First\Last Piece Priority"
         form.append('sequentialDownload', true)
         form.append('firstLastPiecePrio', true)
     }
@@ -432,28 +457,22 @@ function quiAddTorrent(quiURL, quiApiKey, torrentURL, category = '', savePath = 
         headers: {
             'X-API-Key': quiApiKey,
         },
+        timeout: 30000,
         onload: function(response) {
-            
+
             if (response.status == 201) {
                 // Success: The torrent has been added to qui
-
-                document.getElementById('__CLICKED__').textContent = ' ✔️ '
-                document.getElementById('__CLICKED__').removeAttribute('id')
+                setClickedStatus(' ✔️ ')
 
             } else {
                 // Failed: The torrent was NOT added to qui, log the response and display an alert...
                 console.log(response)
-
-                document.getElementById('__CLICKED__').textContent = ' ❌ '
-                document.getElementById('__CLICKED__').removeAttribute('id')
+                setClickedStatus(' ❌ ')
 
                 if (response.status == 401) {
                     // Unauthorized
-                    console.log(response)
-
                     window.alert(`❌ quiCKIE ❌\n\nStatus Code: ${response.status}\n\n${response.responseText}\nVerify that your ApiKey is correct\n\nApiKey: ${quiApiKey}`)
                 } else {
-                    console.log(response)
                     window.alert(`❌ quiCKIE ❌\n\nFailed to Add the Torrent to qui\n\nStatus Code: ${response.status}\n\n${response.responseText}`)
                 }
 
@@ -463,18 +482,14 @@ function quiAddTorrent(quiURL, quiApiKey, torrentURL, category = '', savePath = 
         onerror: function(response) {
             // There was an error making the POST
             console.log(response)
-            document.getElementById('__CLICKED__').textContent = ' ❌ '
-            document.getElementById('__CLICKED__').removeAttribute('id')
-
+            setClickedStatus(' ❌ ')
             window.alert(`❌ quiCKIE ❌\n\nThere was a problem connecting with qui. Verify that qui is running and check your quiURL and ApiKey for any typos\n\nStatus Code: ${response.status}\n\n${response.responseText}`)
 
         },
         ontimeout: function(response) {
             // The connection timed out
             console.log(response)
-            document.getElementById('__CLICKED__').textContent = ' ❌ '
-            document.getElementById('__CLICKED__').removeAttribute('id')
-
+            setClickedStatus(' ❌ ')
             window.alert(`❌ quiCKIE ❌\n\nThe connection to qui timedout\n\nApiUrl: ${quiApiAddTorrentURL}\n\nStatus Code: ${response.status}\n\n${response.responseText}`)
 
         }
@@ -482,44 +497,39 @@ function quiAddTorrent(quiURL, quiApiKey, torrentURL, category = '', savePath = 
 
 }
 
-function createBunnyButton(torrentURL, buttonText = ' 🐰 ', fontSize='inherit') {
+function createBunnyButton(torrentURL, buttonText = ' 🐰 ', fontSize = 'inherit', {titlePrefix, onLeftClick} = {}) {
     // Create the bunnyButton that will be displayed on the site
+    // onLeftClick(button): optional async callback for the left-click action; defaults to URL-based add
 
     let bunnyButton = document.createElement('a')
     bunnyButton.classList.add('quiCKIE_bunnyButton')
     bunnyButton.href = 'javascript:void(0)'
     bunnyButton.textContent = buttonText
-    bunnyButton.title = `quiCKIE\n-----------------\nCategory: ${SETTINGS.category}\nSavePath: ${SETTINGS.savePath}\nTags: ${SETTINGS.tags}\nRatioLimit: ${SETTINGS.ratioLimit}\nStartPaused: ${SETTINGS.startPaused}\nSeqPiece: ${SETTINGS.seqPieces}`
+    bunnyButton.title = `${titlePrefix || 'quiCKIE'}\n-----------------\nCategory: ${SETTINGS.category}\nSavePath: ${SETTINGS.savePath}\nTags: ${SETTINGS.tags}\nRatioLimit: ${SETTINGS.ratioLimit}\nStartPaused: ${SETTINGS.startPaused}\nSeqPiece: ${SETTINGS.seqPieces}`
     bunnyButton.setAttribute('torrentURL', torrentURL)
     bunnyButton.setAttribute('style', `font-size: ${fontSize}; text-align: center; text-decoration: none`)
 
-
     bunnyButton.addEventListener('mouseover', function(event) {
-        
         this.style.textShadow = '0px 0px 1px black, 0 0 5px #2cadff'
     })
 
     bunnyButton.addEventListener('mouseout', function(event) {
-        
         this.style.textShadow = ''
     })
 
-    bunnyButton.addEventListener('mouseup', function(event) {
+    bunnyButton.addEventListener('mouseup', async function(event) {
         // When this bunnyButton is clicked, determine what kind of click it was and respond accordingly...
 
         if ( event.ctrlKey ) {
             // Ctrl-Click: Open the quiURL in a new tab
-
             window.open(SETTINGS.quiURL).focus()
 
         } else if ( event.shiftKey ) {
             // Shift-Click: Open the quiCKIE settings panel
-
             GM_config.open()
-            
+
         } else if ( event.button == 1 ) {
             // Middle-Click: Open the quiURL in a new tab
-
             window.open(SETTINGS.quiURL, '_blank').focus()
 
         } else if ( event.button == 0 ) {
@@ -527,19 +537,19 @@ function createBunnyButton(torrentURL, buttonText = ' 🐰 ', fontSize='inherit'
 
             if (SETTINGS.quiURL == '' || SETTINGS.quiApiKey == '') {
                 // Alert the user that both a quiURL or ApiKey are required
-
                 window.alert('🐰 quiCKIE 🐰\n\nBoth a quiURL and ApiKey are required to communicate with qui\n\nShift-Click the BunnyButton to open the setting panel')
 
+            } else if (onLeftClick) {
+                // Custom left-click handler (e.g. Takeout blob download + upload)
+                await onLeftClick(this)
+
             } else {
-                // Run the function to add the torrent to qui with the current site settings
+                // Default: add the torrent URL to qui with the current site settings
                 this.id = '__CLICKED__'
                 this.textContent = ' 🕓 '
-
-                quiAddTorrent(SETTINGS.quiURL, SETTINGS.quiApiKey, torrentURL, SETTINGS.category, SETTINGS.savePath, SETTINGS.tags, SETTINGS.ratioLimit, SETTINGS.startPaused, SETTINGS.seqPieces)
-
+                quiAddTorrent(SETTINGS.quiURL, SETTINGS.quiApiKey, {torrentURL: torrentURL}, SETTINGS.category, SETTINGS.savePath, SETTINGS.tags, SETTINGS.ratioLimit, SETTINGS.startPaused, SETTINGS.seqPieces)
             }
         }
-
 
     })
 
@@ -623,141 +633,23 @@ async function downloadOpsTorrentBlob(opsId, useToken) {
     });
 }
 
-function quiAddTorrentFile(quiURL, quiApiKey, torrentBlob, filename, category = '', savePath = '', tags = '', ratioLimit = '', startPaused = false, seqPieces = false) {
-    // Upload a .torrent file to qui (multipart field "torrent")
-    try {
-        let quiHost = quiURL.match(/^(.*)\/(instances\/\d+)/)[1];
-        let quiInstance = quiURL.match(/^(.*)\/(instances\/\d+)/)[2];
-        var quiApiAddTorrentURL = `${quiHost}/api/${quiInstance}/torrents`;
-    } catch (error) {
-        console.log(error);
-
-        if (document.getElementById('__CLICKED__')) {
-            document.getElementById('__CLICKED__').textContent = ' ❌ ';
-            document.getElementById('__CLICKED__').removeAttribute('id');
-        }
-
-        window.alert(`❌ quiCKIE ❌\n\nFailed to generate the qui API endpoint from the saved quiURL.\n\nCheck your quiURL for typos.\n\n${quiURL}`);
-        return;
-    }
-
-    let form = new FormData();
-    form.append('torrent', torrentBlob, filename);
-    form.append('category', category);
-    form.append('savepath', savePath);
-    form.append('tags', tags);
-    form.append('ratioLimit', ratioLimit);
-    form.append('paused', startPaused);
-
-    if (seqPieces == true) {
-        form.append('sequentialDownload', true);
-        form.append('firstLastPiecePrio', true);
-    }
-
-    GM_xmlhttpRequest({
-        method: 'POST',
-        url: quiApiAddTorrentURL,
-        data: form,
-        headers: {
-            'X-API-Key': quiApiKey,
-        },
-        timeout: 30000,
-        onload: function (response) {
-            if (response.status == 201) {
-                if (document.getElementById('__CLICKED__')) {
-                    document.getElementById('__CLICKED__').textContent = ' ✔️ ';
-                    document.getElementById('__CLICKED__').removeAttribute('id');
-                }
-            } else {
-                console.log(response);
-
-                if (document.getElementById('__CLICKED__')) {
-                    document.getElementById('__CLICKED__').textContent = ' ❌ ';
-                    document.getElementById('__CLICKED__').removeAttribute('id');
-                }
-
-                if (response.status == 401) {
-                    window.alert(`❌ quiCKIE ❌\n\nStatus Code: ${response.status}\n\n${response.responseText}\nVerify that your ApiKey is correct\n\nApiKey: ${quiApiKey}`);
-                } else {
-                    window.alert(`❌ quiCKIE ❌\n\nFailed to Add the Torrent to qui\n\nStatus Code: ${response.status}\n\n${response.responseText}`);
-                }
-            }
-        },
-        onerror: function (response) {
-            console.log(response);
-
-            if (document.getElementById('__CLICKED__')) {
-                document.getElementById('__CLICKED__').textContent = ' ❌ ';
-                document.getElementById('__CLICKED__').removeAttribute('id');
-            }
-
-            window.alert(`❌ quiCKIE ❌\n\nThere was a problem connecting with qui. Verify that qui is running and check your quiURL and ApiKey for any typos\n\nStatus Code: ${response.status}\n\n${response.responseText}`);
-        },
-        ontimeout: function (response) {
-            console.log(response);
-
-            if (document.getElementById('__CLICKED__')) {
-                document.getElementById('__CLICKED__').textContent = ' ❌ ';
-                document.getElementById('__CLICKED__').removeAttribute('id');
-            }
-
-            window.alert(`❌ quiCKIE ❌\n\nThe connection to qui timedout\n\nApiUrl: ${quiApiAddTorrentURL}\n\nStatus Code: ${response.status}\n\n${response.responseText}`);
-        }
-    });
-}
-
 function createTakeoutOpsBunnyButton(opsId, useToken, fontSize = 'inherit') {
-    let bunnyButton = document.createElement('a');
-    bunnyButton.classList.add('quiCKIE_bunnyButton');
-    bunnyButton.href = 'javascript:void(0)';
-    bunnyButton.textContent = ' 🐰 ';
-    bunnyButton.title = `quiCKIE (Takeout OPS)\n-----------------\n${useToken ? 'Uses FL token' : 'Normal download'}\nCategory: ${SETTINGS.category}\nSavePath: ${SETTINGS.savePath}\nTags: ${SETTINGS.tags}\nRatioLimit: ${SETTINGS.ratioLimit}\nStartPaused: ${SETTINGS.startPaused}\nSeqPiece: ${SETTINGS.seqPieces}`;
-    bunnyButton.setAttribute('style', `font-size: ${fontSize}; text-align: center; text-decoration: none`);
-
-    bunnyButton.addEventListener('mouseover', function () {
-        this.style.textShadow = '0px 0px 1px black, 0 0 5px #2cadff';
-    });
-
-    bunnyButton.addEventListener('mouseout', function () {
-        this.style.textShadow = '';
-    });
-
-    bunnyButton.addEventListener('mouseup', async function (event) {
-        if (event.ctrlKey) {
-            window.open(SETTINGS.quiURL).focus();
-            return;
-        } else if (event.shiftKey) {
-            GM_config.open();
-            return;
-        } else if (event.button == 1) {
-            window.open(SETTINGS.quiURL, '_blank').focus();
-            return;
-        } else if (event.button != 0) {
-            return;
-        }
-
-        if (SETTINGS.quiURL == '' || SETTINGS.quiApiKey == '') {
-            window.alert('🐰 quiCKIE 🐰\n\nBoth a quiURL and ApiKey are required to communicate with qui\n\nShift-Click the BunnyButton to open the setting panel');
-            return;
-        }
-
-        this.id = '__CLICKED__';
-        this.textContent = ' 🕓 ';
-
-        try {
-            const { blob, filename } = await downloadOpsTorrentBlob(opsId, useToken);
-            quiAddTorrentFile(SETTINGS.quiURL, SETTINGS.quiApiKey, blob, filename, SETTINGS.category, SETTINGS.savePath, SETTINGS.tags, SETTINGS.ratioLimit, SETTINGS.startPaused, SETTINGS.seqPieces);
-        } catch (e) {
-            console.log(e);
-            if (document.getElementById('__CLICKED__')) {
-                document.getElementById('__CLICKED__').textContent = ' ❌ ';
-                document.getElementById('__CLICKED__').removeAttribute('id');
+    // Thin wrapper: creates a bunnyButton with a custom left-click that downloads the OPS .torrent and uploads to qui
+    return createBunnyButton('', ' 🐰 ', fontSize, {
+        titlePrefix: `quiCKIE (Takeout OPS)\n${useToken ? 'Uses FL token' : 'Normal download'}`,
+        onLeftClick: async function(button) {
+            button.id = '__CLICKED__';
+            button.textContent = ' 🕓 ';
+            try {
+                const { blob, filename } = await downloadOpsTorrentBlob(opsId, useToken);
+                quiAddTorrent(SETTINGS.quiURL, SETTINGS.quiApiKey, {torrentBlob: blob, filename: filename}, SETTINGS.category, SETTINGS.savePath, SETTINGS.tags, SETTINGS.ratioLimit, SETTINGS.startPaused, SETTINGS.seqPieces);
+            } catch (e) {
+                console.log(e);
+                setClickedStatus(' ❌ ');
+                window.alert(`❌ quiCKIE ❌\n\n${e.message}`);
             }
-            window.alert(`❌ quiCKIE ❌\n\n${e.message}`);
         }
     });
-
-    return bunnyButton;
 }
 
 function injectTakeoutOpsButtons(root = document) {
@@ -801,75 +693,54 @@ const SETTINGS = {
 
 // @trackerIfBlocks
 //     ! This is the same domain used when creating the tracker's settings fields below @trackerFields
-if ( trackerDomain == 'animebytes' ) {
-    // ----------------------------------- AnimeBytes -----------------------------------
-    // Browse | Collages | Company | Series 
+//
+// How to add new trackers: add an entry to simpleTrackers below (selector + separator, optional buttonText/fontSize).
+// Only trackers with non-standard insertion logic need their own block after the simple-tracker loop.
 
-    // An array of all the torrent download elements on the page 
-    let allDownloadElements = document.querySelectorAll('a[href^="/torrent/"][title="Download torrent"]')
+const simpleTrackers = {
+    'animebytes':     { selector: 'a[href^="/torrent/"][title="Download torrent"]', separator: ' |' },
+    'bibliotik':      { selector: 'a[href^="/torrents/"][title="Download"]', separator: '  ' },
+    'broadcasthe':    { selector: 'a[href^="torrents.php?action=download&id="]', separator: ' |' },
+    'deepbassnine':   { selector: 'a[href^="torrents.php?action=download&id="]', separator: '|' },
+    'gazellegames':   { selector: 'a[href^="torrents.php?action=download&id="]', separator: '|' },
+    'happyfappy':     { selector: 'a[href^="/torrents.php?action=download&id="]', separator: '  ', buttonText: '🐰', fontSize: '125%' },
+    'hdbits':         { selector: 'a.js-download[href^="/download.php/"]', separator: '  ', buttonText: '🐰', fontSize: '140%' },
+    'jpopsuki':       { selector: 'a[href^="torrents.php?action=download&id="]', separator: ' |' },
+    'nyaa':           { selector: 'a[href^="magnet:?xt\\=urn:btih:"]', separator: ' ' },
+    'orpheus':        { selector: 'a[href^="torrents.php?action=download&id="]', separator: '|' },
+    'passthepopcorn': { selector: 'a[href^="torrents.php?action=download&id="]', separator: ' |' },
+    'secret-cinema':  { selector: 'a[href^="torrents.php?action=download&id="]', separator: ' |' },
+    'anthelion':      { selector: 'a[href^="torrents.php?action=download&id="]', separator: ' |' },
+    'nebulance':      { selector: 'a[href^="torrents.php?action=download&id="]', separator: ' |' },
+}
 
-    for (let downloadElement of allDownloadElements) {
-        // For each download element, generate a bunnyButton and insert it after the download element
+const unit3dTrackers = {
+    'lst':        { domain: 'lst.gg',         title: 'LST.gg' },
+    'fearnopeer': { domain: 'fearnopeer.com', title: 'FearNoPeer.com' },
+    'seedpool':   { domain: 'seedpool.org',   title: 'Seedpool.org' },
+    'nordicq':     { domain: 'www.nordicq.org',     title: 'NordicQ.org' },
+}
 
-        let bunnyButton = createBunnyButton(downloadElement.href)
+if ( simpleTrackers[trackerDomain] ) {
+    // ----------------------------------- Simple Trackers -----------------------------------
+    // Trackers that follow the standard pattern: query download links, insert bunnyButton after each
 
-        // Insert the bunnyButton after the site's download element
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        
-        // Insert a '|' between the site's download element and the new bunnyButton
-        downloadElement.insertAdjacentText('afterend', ' |')
-
-    }
-
-} else if ( trackerDomain == 'bibliotik' ) {
-    // ----------------------------------- Bibliotik -----------------------------------
-    // Browse | Details
-
-    let allDownloadElements = document.querySelectorAll('a[href^="/torrents/"][title="Download"]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', '  ')
-
-    }
-
-} else if ( trackerDomain == 'broadcasthe' ) {
-    // ----------------------------------- BroadcasTheNet -----------------------------------
-    // Browse | Series | Season\Episodes
-
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
+    const cfg = simpleTrackers[trackerDomain]
+    let allDownloadElements = document.querySelectorAll(cfg.selector)
 
     for (let downloadElement of allDownloadElements) {
 
-        let bunnyButton = createBunnyButton(downloadElement.href)
+        let bunnyButton = createBunnyButton(downloadElement.href, cfg.buttonText, cfg.fontSize)
 
         downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', ' |')
-
-    }
-
-} else if ( trackerDomain == 'deepbassnine' ) {
-    // ----------------------------------- DeepBassNine -----------------------------------
-    // Album | Artist | Browse
-
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', '|')
+        downloadElement.insertAdjacentText('afterend', cfg.separator)
 
     }
 
 } else if ( trackerDomain == 'empornium' ) {
     // ----------------------------------- Empornium -----------------------------------
-    // Browse | Collages | Details | Top10 
-    
+    // Browse | Collages | Details | Top10 (special: collage page uses parentElement insertion)
+
     let allDownloadElements = document.querySelectorAll('a[href^="/torrents.php?action=download&id="]')
 
     for (let downloadElement of allDownloadElements) {
@@ -878,9 +749,7 @@ if ( trackerDomain == 'animebytes' ) {
 
         if ( document.location.pathname.match(/\/collage\/\d+/) ) {
             // Collage Page: Insert bunnyButton in the same row as the other buttons
-            
             downloadElement.parentElement.insertAdjacentElement('afterend', bunnyButton)
-
         } else {
             downloadElement.insertAdjacentElement('afterend', bunnyButton)
             downloadElement.insertAdjacentText('afterend', '  ')
@@ -888,69 +757,9 @@ if ( trackerDomain == 'animebytes' ) {
 
     }
 
-} else if ( trackerDomain == 'gazellegames' ) {
-    // ----------------------------------- GazelleGames -----------------------------------
-    // Browse | Bundles | Game
-
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', '|')
-
-    }
-
-} else if ( trackerDomain == 'happyfappy' ) {
-    // ----------------------------------- HappyHappy -----------------------------------
-    // Browse | Details | Top10 | Collages
-
-    let allDownloadElements = document.querySelectorAll('a[href^="/torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href, '🐰', '125%')
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', '  ')
-
-    }
-
-} else if ( trackerDomain == 'hdbits' ) {
-    // ----------------------------------- HDBits -----------------------------------
-    // Browse | Details | Film  
-
-    let allDownloadElements = document.querySelectorAll('a.js-download[href^="/download.php/"]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href, '🐰', '140%')
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', '  ')
-
-    }
-
-} else if ( trackerDomain == 'jpopsuki' ) {
-    // ----------------------------------- JpopSuki -----------------------------------
-    // Album | Artist | Browse
-
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', ' |')
-
-    }
-
 } else if ( trackerDomain == 'myanonamouse' ) {
     // ----------------------------------- MyAnonaMouse -----------------------------------
-    // Browse | Details | Homepage
+    // Browse | Details | Homepage (special: uses MutationObserver for browse/homepage)
 
     if ( document.URL.match(/\/t\/\d+/) ) {
         // The book details page, which doesn't require a MutationObserver
@@ -961,10 +770,9 @@ if ( trackerDomain == 'animebytes' ) {
 
         downloadButton.insertAdjacentElement('afterend', bunnyButton)
 
-
     } else {
         // The Browse or Homepage, both of which require a MutationObserver
-       
+
         let observer = new MutationObserver(function(mutations) {
             // Functionality to run when changes are detected to the target element
 
@@ -980,12 +788,9 @@ if ( trackerDomain == 'animebytes' ) {
 
                 }
 
-
-
             } catch(error) {
                 // console.log(error)
                 return
-
             }
         })
 
@@ -995,54 +800,9 @@ if ( trackerDomain == 'animebytes' ) {
         observer.observe(target, config)
     }
 
-} else if ( trackerDomain == 'nyaa' ) {
-    // ----------------------------------- Nyaa -----------------------------------
-    // Browse | Details
-
-    let allDownloadElements = document.querySelectorAll('a[href^="magnet:?xt\=urn:btih:"]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', ' ')
-
-    }
-
-} else if ( trackerDomain == 'orpheus' ) {
-    // ----------------------------------- Orpheus -----------------------------------
-    // Album | Artist | Browse | Collages
-
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', '|')
-
-    }
-
-} else if ( trackerDomain == 'passthepopcorn' ) {
-    // ----------------------------------- PassThepopcorn -----------------------------------
-    // Film
-    
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', ' |')
-
-    }
-
 } else if ( trackerDomain == 'redacted' ) {
     // ----------------------------------- Redacted -----------------------------------
-    // Album | Artist | Browse
+    // Album | Artist | Browse (special: includes Takeout integration)
 
     let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
 
@@ -1071,53 +831,46 @@ if ( trackerDomain == 'animebytes' ) {
         }, 150);
     }).observe(takeoutTarget, { childList: true, subtree: true });
 
+} else if ( unit3dTrackers[trackerDomain] ) {
+    // ----------------------------------- UNIT3D Trackers (LST, FearNoPeer, Seedpool, ...) -----------------------------------
 
-
-} else if ( trackerDomain == 'secret-cinema' ) {
-    // ----------------------------------- Secret-Cinema -----------------------------------
-    // Artist (no DL links as of script creation) | Browse | Movie
-
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', ' |')
-
-    }
-}
-    else if ( trackerDomain == 'anthelion' ) {
-    // ----------------------------------- Anthelion -----------------------------------
-    // Browse | Collages | Film
-
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
+    const cfg = unit3dTrackers[trackerDomain]
+    let allDownloadElements = document.querySelectorAll(
+        `a.torrent-actions__btn--download[href*="/torrents/download/"], a[href^="https://${cfg.domain}/torrents/download/"], a[href^="/torrents/download/"]`
+    )
 
     for (let downloadElement of allDownloadElements) {
 
-        let bunnyButton = createBunnyButton(downloadElement.href)
+        // Avoid duplicates if the page re-renders
+        if (downloadElement.nextElementSibling && downloadElement.nextElementSibling.classList && downloadElement.nextElementSibling.classList.contains('quiCKIE_bunnyButton')) {
+            continue
+        }
+
+        const downloadURL = downloadElement.href
+
+        const bunnyButton = createBunnyButton(downloadURL, ' 🐰 ', 'inherit', {
+            titlePrefix: `quiCKIE (${cfg.title})`,
+            onLeftClick: async function(button) {
+                button.id = '__CLICKED__'
+                button.textContent = ' 🕓 '
+                try {
+                    const { blob, filename } = await downloadTorrentBlobFromURL(downloadURL)
+                    quiAddTorrent(SETTINGS.quiURL, SETTINGS.quiApiKey, { torrentBlob: blob, filename: filename }, SETTINGS.category, SETTINGS.savePath, SETTINGS.tags, SETTINGS.ratioLimit, SETTINGS.startPaused, SETTINGS.seqPieces)
+                } catch (e) {
+                    console.log(e)
+                    setClickedStatus(' ❌ ')
+                    window.alert(`❌ quiCKIE ❌\n\n${e.message}`)
+                }
+            }
+        })
+
+        // Add some spacing so it doesn't stick to the Download button
+        bunnyButton.style.marginLeft = '6px'
 
         downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', ' |')
-
     }
-    }
-    else if ( trackerDomain == 'nebulance' ) {
-    // ----------------------------------- Nebulance -----------------------------------
-    // Browse | Top 10 | Bookmarks
 
-    let allDownloadElements = document.querySelectorAll('a[href^="torrents.php?action=download&id="]')
-
-    for (let downloadElement of allDownloadElements) {
-
-        let bunnyButton = createBunnyButton(downloadElement.href)
-
-        downloadElement.insertAdjacentElement('afterend', bunnyButton)
-        downloadElement.insertAdjacentText('afterend', ' |')
-
-    }
-    } else {
+} else {
     // ----------------------------------- NONE -----------------------------------
     console.log(`quiCKIE: The parsed trackerDomain of this URL did not match any of the supported trackers\n\ntrackerDomain: ${trackerDomain}`)
 }
