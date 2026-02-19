@@ -24,6 +24,7 @@
 // @grant   GM_registerMenuCommand
 // @grant   GM_setValue
 // @grant   GM_xmlhttpRequest
+// @connect cyclingarchive.club
 // @connect orpheus.network
 
 // ----------------------------------- Matches --------------------------------------
@@ -111,6 +112,8 @@
 
 // @match   https://www.nordicq.org/torrents*
 
+// @match   https://cyclingarchive.club/details.php?id=*
+
 
 
 
@@ -151,7 +154,8 @@ const settingsPanelEntries = {
     'lst': 'LST',
     'fearnopeer': 'FearNoPeer',
     'seedpool': 'Seedpool',
-    'nordicq': 'NordicQ'
+    'nordicq': 'NordicQ',
+    'cyclingarchive': 'CyclingArchive',
 }
 
 // =================================== CONFIG MENU ======================================
@@ -594,6 +598,26 @@ function filenameFromHeaders(responseHeaders) {
     catch { return raw.replace(/^"(.*)"$/, '$1'); }
 }
 
+function downloadTorrentBlobFromURL(url) {
+    // Generic: download a .torrent file as a blob via GM_xmlhttpRequest (uses the browser's cookies)
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url,
+            responseType: 'blob',
+            timeout: 30000,
+            onload: (res) => {
+                if (res.status !== 200) return reject(new Error(`Download failed (HTTP ${res.status})`));
+                const blob = res.response;
+                const filename = filenameFromHeaders(res.responseHeaders);
+                resolve({ blob, filename });
+            },
+            onerror: () => reject(new Error('Torrent download failed (network error)')),
+            ontimeout: () => reject(new Error('Torrent download timed out')),
+        });
+    });
+}
+
 async function downloadOpsTorrentBlob(opsId, useToken) {
     const opsApiKey = await getTakeoutOpsApiKey();
     if (!opsApiKey) throw new Error('No OPS API key found. Add it in Takeout first.');
@@ -719,6 +743,13 @@ const unit3dTrackers = {
     'fearnopeer': { domain: 'fearnopeer.com', title: 'FearNoPeer.com' },
     'seedpool':   { domain: 'seedpool.org',   title: 'Seedpool.org' },
     'nordicq':     { domain: 'www.nordicq.org',     title: 'NordicQ.org' },
+}
+
+// Trackers where qBittorrent can't fetch the .torrent itself (e.g. cookie-gated).
+// The userscript downloads the blob via GM_xmlhttpRequest and uploads it to qui.
+// Requires a matching @connect entry in the metadata block.
+const blobTrackers = {
+    'cyclingarchive': { selector: 'a[href^="download.php?"]', separator: ' |', title: 'CyclingArchive' },
 }
 
 if ( simpleTrackers[trackerDomain] ) {
@@ -868,6 +899,37 @@ if ( simpleTrackers[trackerDomain] ) {
         bunnyButton.style.marginLeft = '6px'
 
         downloadElement.insertAdjacentElement('afterend', bunnyButton)
+    }
+
+} else if ( blobTrackers[trackerDomain] ) {
+    // ----------------------------------- Blob Trackers (CyclingArchive, ...) -----------------------------------
+    // Trackers where the userscript must download the .torrent blob and upload it to qui
+
+    const cfg = blobTrackers[trackerDomain]
+    let allDownloadElements = document.querySelectorAll(cfg.selector)
+
+    for (let downloadElement of allDownloadElements) {
+
+        const downloadURL = downloadElement.href
+
+        const bunnyButton = createBunnyButton(downloadURL, ' 🐰 ', 'inherit', {
+            titlePrefix: `quiCKIE (${cfg.title})`,
+            onLeftClick: async function(button) {
+                button.id = '__CLICKED__'
+                button.textContent = ' 🕓 '
+                try {
+                    const { blob, filename } = await downloadTorrentBlobFromURL(downloadURL)
+                    quiAddTorrent(SETTINGS.quiURL, SETTINGS.quiApiKey, { torrentBlob: blob, filename: filename }, SETTINGS.category, SETTINGS.savePath, SETTINGS.tags, SETTINGS.ratioLimit, SETTINGS.startPaused, SETTINGS.seqPieces)
+                } catch (e) {
+                    console.log(e)
+                    setClickedStatus(' ❌ ')
+                    window.alert(`❌ quiCKIE ❌\n\n${e.message}`)
+                }
+            }
+        })
+
+        downloadElement.insertAdjacentElement('afterend', bunnyButton)
+        downloadElement.insertAdjacentText('afterend', cfg.separator)
     }
 
 } else {
