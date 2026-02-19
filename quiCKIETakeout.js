@@ -95,8 +95,8 @@
 // @match   https://secret-cinema.pw/top10.php*
 // @match   https://secret-cinema.pw/torrents.php*
 
-// @match   https://anthelion.me/torrents.php?*
-// @match   https://anthelion.me/collages.php?*
+// @match   https://anthelion.me/torrents.php*
+// @match   https://anthelion.me/collages.php*
 
 
 // @match   https://nebulance.io/torrents.php*
