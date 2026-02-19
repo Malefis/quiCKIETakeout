@@ -402,7 +402,7 @@ function quiAddTorrent(quiURL, quiApiKey, torrentURL, category = '', savePath = 
         // Failed to parse quiURL
         console.log(error)
 
-        document.getElementById('__CLICKED__').textContent = ' ❌ '
+        document.getElementById('__CLICKED__').textContent == ' ❌ '
         document.getElementById('__CLICKED__').removeAttribute('id')
 
         window.alert(`❌ quiCKIE ❌\n\nFailed to generate the qui API endpoint from the saved quiURL.\n\nCheck your quiURL for typos.\n\n${quiURL}`)
@@ -419,8 +419,8 @@ function quiAddTorrent(quiURL, quiApiKey, torrentURL, category = '', savePath = 
     form.append('ratioLimit', ratioLimit)
     form.append('paused', startPaused)
 
-    if ( seqPieces ) {
-        // Allow for playback while downloading by enabling "Sequential Piece Downloading" AND "First\Last Piece Priority"
+    if ( seqPieces == true ) {
+        // Allow for playback while downloading by enabling "Sequential Piece Downloading" AND "First\Last Piece Priority" 
         form.append('sequentialDownload', true)
         form.append('firstLastPiecePrio', true)
     }
@@ -649,7 +649,7 @@ function quiAddTorrentFile(quiURL, quiApiKey, torrentBlob, filename, category = 
     form.append('ratioLimit', ratioLimit);
     form.append('paused', startPaused);
 
-    if (seqPieces) {
+    if (seqPieces == true) {
         form.append('sequentialDownload', true);
         form.append('firstLastPiecePrio', true);
     }
